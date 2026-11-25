@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ALARM SUMMARY — SE 09 MAGOANINE | LINHA EK5 (33 kV)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Roboto+Condensed:wght@400;500;700&family=Share+Tech+Mono&display=swap">
+<style>
+/* Estilo HMI Industrial — Alarm Summary Screen */
+:root {
+  --bg: #161b20;
+  --panel: #1e252c;
+  --panel-alt: #242c35;
+  --header-bg: #0f1317;
+  --border: #384450;
+  --border-light: #4b5a69;
+  --ink: #e6edf3;
+  --muted: #93a3b3;
+
+  --accent: #38bdf8;
+  --ok: #22c55e;
+  --ok-bg: #122c1d;
+  --warn: #f59e0b;
+  --warn-bg: #33240c;
+  --crit: #ef4444;
+  --crit-bg: #381414;
+  --dead: #64748b;
+
+  --f-ui: 'Roboto Condensed', 'Segoe UI', Arial, sans-serif;
+  --f-head: 'Chakra Petch', 'Roboto Condensed', sans-serif;
+  --f-mono: 'Share Tech Mono', Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.35 var(--f-ui);
+  letter-spacing: 0.02em;
+}
+
+button {
+  font: 700 13px var(--f-head);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  background: var(--panel-alt);
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: #2f3a46;
+  border-color: var(--accent);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button.btn-ack {
+  background: #7c2d12;
+  border-color: var(--warn);
+  color: #fef3c7;
+}
+button.btn-ack:hover:not(:disabled) {
+  background: #9a3412;
+}
+button.btn-reset {
+  background: #14532d;
+  border-color: var(--ok);
+  color: #dcfce7;
+}
+button.btn-reset:hover:not(:disabled) {
+  background: #166534;
+}
+
+.mono {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hmi-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+/* Barra superior */
+.hmi-topbar {
+  background: var(--header-bg);
+  border-bottom: 2px solid var(--border-light);
+  padding: 8px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+}
+.sys-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sys-title {
+  font: 700 18px/1.1 var(--f-head);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sys-sub {
+  font: 12px var(--f-mono);
+  color: var(--muted);
+}
+.sys-clock {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font: 15px var(--f-mono);
+}
+.sys-clock .date { color: var(--muted); font-size: 13px; }
+
+/* Barra de resumo de alarmes (KPI Strip) */
+.kpi-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.kpi {
+  padding: 8px 14px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.kpi:last-child { border-right: 0; }
+.kpi-lbl {
+  font: 700 12px var(--f-head);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kpi-val {
+  font: 22px/1 var(--f-mono);
+}
+.kpi.crit .kpi-val { color: var(--crit); }
+.kpi.warn .kpi-val { color: var(--warn); }
+.kpi.ok .kpi-val { color: var(--ok); }
+
+@media (max-width: 860px) {
+  .kpi-bar { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Banner de alarme prioritário */
+.alarm-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 2px solid var(--border);
+}
+.alarm-banner[data-state="normal"] {
+  background: var(--ok-bg);
+  border-bottom-color: var(--ok);
+}
+.alarm-banner[data-state="fault"] {
+  background: var(--crit-bg);
+  border-bottom-color: var(--crit);
+  animation: flashBanner 1.1s steps(2, start) infinite;
+}
+.alarm-banner[data-state="ack"] {
+  background: var(--warn-bg);
+  border-bottom-color: var(--warn);
+}
+@keyframes flashBanner {
+  0% { background: #451515; }
+  50% { background: #290d0d; }
+}
+
+.banner-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lamp {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: var(--ok);
+}
+[data-state="fault"] .lamp { background: var(--crit); }
+[data-state="ack"] .lamp { background: var(--warn); }
+
+.banner-msg {
+  font: 700 18px/1.15 var(--f-head);
+  text-transform: uppercase;
+}
+.banner-meta {
+  font: 13px var(--f-mono);
+  color: var(--muted);
+  margin-top: 2px;
+}
+.banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Área principal */
+.hmi-body {
+  padding: 14px 16px;
+  display: grid;
+  gap: 14px;
+  flex: 1;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+.panel-hdr {
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--border);
+  padding: 7px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.panel-hdr h2 {
+  margin: 0;
+  font: 700 13px var(--f-head);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+.panel-hdr span {
+  font: 12px var(--f-mono);
+  color: var(--muted);
+}
+
+/* Esquema da linha */
+.sld-wrap {
+  padding: 14px 16px 10px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  font: 12px var(--f-mono);
+  color: var(--muted);
+}
+.legend li { display: flex; align-items: center; gap: 6px; }
+.lg { display: inline-block; width: 10px; height: 10px; }
+.lg.pt { border: 2px solid var(--muted); }
+.lg.fl { background: var(--crit); border-radius: 50%; }
+.lg.zn { background: var(--crit); opacity: 0.35; width: 16px; }
+
+.dg { --se-w: 84px; display: grid; grid-template-columns: var(--se-w) minmax(0, 1fr); }
+.se { position: relative; height: 136px; }
+.se-box {
+  position: absolute; left: 0; top: 38px; width: 66px; height: 46px;
+  border: 2px solid var(--ink); background: var(--header-bg);
+  display: grid; place-items: center; font: 700 14px var(--f-head);
+}
+.se::after {
+  content: ""; position: absolute; left: 66px; top: 58px; width: 18px; height: 5px;
+  background: var(--ok);
+}
+.dg.dead .se::after { background: var(--dead); }
+
+.track { position: relative; height: 136px; margin-right: 14px; }
+.wire {
+  position: absolute; left: 0; right: 0; top: 58px; height: 5px;
+  background: var(--ok); z-index: 1;
+}
+.dg.dead .wire {
+  background: repeating-linear-gradient(90deg, var(--dead) 0 10px, transparent 10px 16px);
+}
+.endcap {
+  position: absolute; right: 0; top: 47px; width: 3px; height: 27px;
+  background: var(--ink); z-index: 1;
+}
+.seg {
+  position: absolute; top: 49px; height: 23px;
+  background: rgba(239, 68, 68, 0.16); border: 1px dashed var(--crit);
+}
+.tap {
+  position: absolute; top: 63px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; z-index: 2;
+}
+.tap i { display: block; width: 2px; height: 13px; background: var(--muted); }
+.tap b { display: block; width: 11px; height: 11px; border: 2px solid var(--muted); background: var(--panel); }
+.tap span { margin-top: 3px; font: 11px var(--f-mono); color: var(--muted); }
+
+.band {
+  position: absolute; top: 49px; height: 23px;
+  background: var(--crit); opacity: 0.32; min-width: 6px; z-index: 2;
+}
+.fault {
+  position: absolute; top: 0; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; z-index: 4;
+}
+.fault .pill {
+  transform: translateX(var(--sx, 0px));
+  background: var(--crit); color: #fff;
+  font: 700 13px/1 var(--f-mono); padding: 4px 8px; border-radius: 2px; white-space: nowrap;
+}
+.fault .stem { display: block; width: 2px; height: 32px; background: var(--crit); }
+.fault .fdot {
+  display: block; width: 13px; height: 13px; margin-top: -2px;
+  border-radius: 50%; background: var(--crit); border: 2px solid #fff;
+}
+.axis {
+  position: absolute; left: 0; right: 0; top: 112px; height: 24px;
+  border-top: 1px solid var(--border-light);
+}
+.tick {
+  position: absolute; top: 0; transform: translateX(-50%);
+  padding-top: 5px; font: 11px var(--f-mono); color: var(--muted);
+}
+.tick::before {
+  content: ""; position: absolute; left: 50%; top: 0; width: 1px; height: 4px;
+  background: var(--border-light);
+}
+
+/* Tabela Alarm Summary */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.filter-btn {
+  padding: 3px 9px;
+  font-size: 11px;
+  background: var(--header-bg);
+}
+.filter-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tbl-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th {
+  background: var(--header-bg);
+  font: 700 11px var(--f-head);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+}
+td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: rgba(56, 189, 248, 0.07); }
+tbody tr.selected { background: rgba(56, 189, 248, 0.14); outline: 1px solid var(--accent); }
+tbody tr.row-unack { background: rgba(239, 68, 68, 0.14); }
+tbody tr.row-ack { background: rgba(245, 158, 11, 0.10); }
+
+.prio {
+  display: inline-block;
+  min-width: 58px;
+  text-align: center;
+  padding: 2px 6px;
+  font: 700 11px var(--f-mono);
+  border-radius: 2px;
+}
+.prio.p1 { background: var(--crit); color: #fff; }
+.prio.p2 { background: var(--warn); color: #111; }
+.prio.p3 { background: #334155; color: #cbd5e1; }
+
+.st-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  font: 700 11px var(--f-mono);
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+.st-pill.unack { background: var(--crit-bg); color: var(--crit); border: 1px solid var(--crit); }
+.st-pill.ack { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn); }
+.st-pill.rtn { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok); }
+
+/* Rodapé HMI */
+.hmi-footer {
+  background: var(--header-bg);
+  border-top: 1px solid var(--border);
+  padding: 6px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font: 12px var(--f-mono);
+  color: var(--muted);
+}
+</style>
+</head>
+<body>
+<div class="hmi-shell">
+  <!-- Barra de topo -->
+  <header class="hmi-topbar">
+    <div class="sys-id">
+      <div>
+        <div class="sys-title">Alarm Summary — Subestação 09 Magoanine</div>
+        <div class="sys-sub">ALIMENTADOR EK5 · 33 kV · 50 Hz</div>
+      </div>
+    </div>
+    <div class="sys-clock">
+      <span class="date" id="sysDate">--/--/----</span>
+      <span id="sysTime">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- Contadores de estado -->
+  <div class="kpi-bar">
+    <div class="kpi crit">
+      <span class="kpi-lbl">Por Reconhecer</span>
+      <span class="kpi-val mono" id="cntUnack">0</span>
+    </div>
+    <div class="kpi warn">
+      <span class="kpi-lbl">Reconhecidos</span>
+      <span class="kpi-val mono" id="cntAck">0</span>
+    </div>
+    <div class="kpi ok">
+      <span class="kpi-lbl">Normalizados</span>
+      <span class="kpi-val mono" id="cntRtn">0</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-lbl">Total Registos</span>
+      <span class="kpi-val mono" id="cntTotal">0</span>
+    </div>
+  </div>
+
+  <!-- Faixa do alarme mais recente / ativo -->
+  <section class="alarm-banner" id="alarmBanner" data-state="normal" role="status" aria-live="polite">
+    <div class="banner-left">
+      <span class="lamp" aria-hidden="true"></span>
+      <div>
+        <div class="banner-msg" id="bannerMsg">SISTEMA NORMAL — SEM ALARMES ATIVOS</div>
+        <div class="banner-meta" id="bannerMeta">LINHA EK5 (1,003 km) · 33 kV</div>
+      </div>
+    </div>
+    <div class="banner-actions">
+      <button type="button" class="btn-ack" id="btnAck" disabled>Reconhecer</button>
+      <button type="button" class="btn-reset" id="btnReset" disabled>Normalizar</button>
+    </div>
+  </section>
+
+  <!-- Corpo principal -->
+  <main class="hmi-body">
+    <!-- Esquema da linha -->
+    <section class="panel" aria-labelledby="h-sld">
+      <div class="panel-hdr">
+        <h2 id="h-sld">Alimentador EK5 (1,003 km)</h2>
+        <span id="sldInfo">v = 293,4 m/µs</span>
+      </div>
+      <div class="sld-wrap">
+        <ul class="legend">
+          <li><i class="lg pt"></i>Posto de Transformação (PT)</li>
+          <li><i class="lg fl"></i>Ponto de Falha Localizado</li>
+          <li><i class="lg zn"></i>Margem de Patrulha</li>
+        </ul>
+        <div class="dg" id="dg">
+          <div class="se">
+            <div class="se-box">SE 09</div>
+          </div>
+          <div class="track" id="track">
+            <div class="seg" id="seg" hidden></div>
+            <div class="wire"></div>
+            <div class="endcap"></div>
+            <div id="taps"></div>
+            <div class="band" id="band" hidden></div>
+            <div class="fault" id="fault" hidden>
+              <span class="pill" id="faultPill"></span>
+              <i class="stem"></i>
+              <i class="fdot"></i>
+            </div>
+            <div class="axis" id="axis"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabela Alarm Summary -->
+    <section class="panel" aria-labelledby="h-sum">
+      <div class="panel-hdr">
+        <h2 id="h-sum">Lista de Alarmes e Eventos (Alarm Summary)</h2>
+        <div class="filter-bar" role="group" aria-label="Filtro de estado">
+          <button type="button" class="filter-btn active" data-filter="ALL">Todos</button>
+          <button type="button" class="filter-btn" data-filter="ACTIVE">Ativos</button>
+          <button type="button" class="filter-btn" data-filter="UNACK">Por Reconhecer</button>
+          <button type="button" class="filter-btn" data-filter="RTN">Normalizados</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Prioridade</th>
+              <th>Data / Hora</th>
+              <th>Distância</th>
+              <th>Linha</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="alarmTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="hmi-footer">
+    <span>ESTADO DE LIGAÇÃO: ATIVO</span>
+  </footer>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  function el(id) { return document.getElementById(id); }
+
+  function fmtNum(v, casas) {
+    casas = casas == null ? 3 : casas;
+    return v.toLocaleString('pt-PT', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+  }
+
+  function fmtHora(d) {
+    return d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function fmtData(d) {
+    return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  var LINHA = {
+    L: 1.003,
+    uncKm: 0.015,
+    pts: [0.16, 0.36, 0.56, 0.76, 0.90]
+  };
+
+  var ROTULO_ESTADO = {
+    UNACK: 'Por Reconhecer',
+    ACK: 'Reconhecido',
+    RTN: 'Normalizado'
+  };
+
+  function listaPTs() {
+    return LINHA.pts.map(function(fr, idx) {
+      return { km: fr * LINHA.L, name: 'PT' + (idx + 1) };
+    });
+  }
+
+  function obterLinha(km) {
+    var marcos = [{ km: 0, name: 'SE 09' }].concat(listaPTs(), [{ km: LINHA.L, name: 'Fim da Linha' }]);
+    for (var i = 0; i < marcos.length - 1; i++) {
+      if (km <= marcos[i + 1].km) return { a: marcos[i], b: marcos[i + 1] };
+    }
+    return { a: marcos[marcos.length - 2], b: marcos[marcos.length - 1] };
+  }
+
+  var agora = new Date();
+  var alarmes = [
+    {
+      id: 104,
+      prio: 'P1',
+      when: fmtData(agora).slice(0, 5) + ' ' + fmtHora(agora),
+      km: 0.742,
+      state: 'UNACK'
+    },
+    {
+      id: 103,
+      prio: 'P1',
+      when: '24/10 09:41:18',
+      km: 0.318,
+      state: 'RTN'
+    },
+    {
+      id: 102,
+      prio: 'P1',
+      when: '22/10 17:05:44',
+      km: 0.864,
+      state: 'RTN'
+    },
+    {
+      id: 101,
+      prio: 'P2',
+      when: '19/10 03:12:09',
+      km: 0.507,
+      state: 'RTN'
+    }
+  ];
+
+  var filtroAtual = 'ALL';
+  var selecionadoId = 104;
+
+  function obterAlarmeAtivo() {
+    for (var i = 0; i < alarmes.length; i++) {
+      if (alarmes[i].state === 'UNACK' || alarmes[i].state === 'ACK') return alarmes[i];
+    }
+    return null;
+  }
+
+  function obterSelecionado() {
+    for (var i = 0; i < alarmes.length; i++) {
+      if (alarmes[i].id === selecionadoId) return alarmes[i];
+    }
+    return alarmes[0] || null;
+  }
+
+  function renderContadores() {
+    var unack = 0, ack = 0, rtn = 0;
+    alarmes.forEach(function(a) {
+      if (a.state === 'UNACK') unack++;
+      else if (a.state === 'ACK') ack++;
+      else rtn++;
+    });
+    el('cntUnack').textContent = unack;
+    el('cntAck').textContent = ack;
+    el('cntRtn').textContent = rtn;
+    el('cntTotal').textContent = alarmes.length;
+  }
+
+  function renderBanner() {
+    var ativo = obterAlarmeAtivo();
+    var banner = el('alarmBanner');
+    var msg = el('bannerMsg');
+    var meta = el('bannerMeta');
+    var btnAck = el('btnAck');
+    var btnReset = el('btnReset');
+
+    if (!ativo) {
+      banner.dataset.state = 'normal';
+      msg.textContent = 'SISTEMA NORMAL — SEM ALARMES ATIVOS NA LINHA EK5';
+      meta.textContent = 'LINHA EK5 (1,003 km) · 33 kV';
+      btnAck.disabled = true;
+      btnReset.disabled = true;
+      el('dg').classList.remove('dead');
+      return;
+    }
+
+    var linha = obterLinha(ativo.km);
+    banner.dataset.state = ativo.state === 'UNACK' ? 'fault' : 'ack';
+    msg.textContent = (ativo.state === 'UNACK' ? '[ALARME ACTIVO] ' : '[RECONHECIDO] ') +
+      'Disparo Protecção A ' + fmtNum(ativo.km) + ' km';
+    meta.textContent = 'LINHA: ' + linha.a.name + ' – ' + linha.b.name +
+      ' · HORA: ' + ativo.when + ' · ESTADO: ' + ROTULO_ESTADO[ativo.state].toUpperCase();
+
+    btnAck.disabled = ativo.state !== 'UNACK';
+    btnReset.disabled = false;
+    el('dg').classList.add('dead');
+  }
+
+  function renderEixo() {
+    var w = el('track').clientWidth || 600;
+    var maxTicks = Math.max(2, Math.floor(w / 68));
+    var passos = [0.1, 0.2, 0.25, 0.5, 1];
+    var passo = 0.5;
+    for (var i = 0; i < passos.length; i++) {
+      if (LINHA.L / passos[i] <= maxTicks) { passo = passos[i]; break; }
+    }
+    var html = '';
+    for (var k = 0; k * passo <= LINHA.L + 1e-9; k++) {
+      var val = Math.min(LINHA.L, k * passo);
+      html += '<span class="tick" style="left:' + (val / LINHA.L * 100) + '%">' +
+        fmtNum(val, 2) + ' km</span>';
+    }
+    html += '<span class="tick" style="left:100%">' + fmtNum(LINHA.L, 3) + ' km</span>';
+    el('axis').innerHTML = html;
+  }
+
+  function renderMarcadores() {
+    el('taps').innerHTML = listaPTs().map(function(pt) {
+      return '<div class="tap" style="left:' + (pt.km / LINHA.L * 100) + '%"><i></i><b></b><span>' + pt.name + '</span></div>';
+    }).join('');
+  }
+
+  function renderFalhaNoDiagrama() {
+    var alvo = obterAlarmeAtivo() || obterSelecionado();
+    var fl = el('fault');
+    var band = el('band');
+    var seg = el('seg');
+
+    if (!alvo || alvo.state === 'RTN') {
+      fl.hidden = true;
+      band.hidden = true;
+      seg.hidden = true;
+      return;
+    }
+
+    var pct = Math.max(0, Math.min(100, (alvo.km / LINHA.L) * 100));
+    fl.hidden = false;
+    fl.style.left = pct + '%';
+    el('faultPill').textContent = fmtNum(alvo.km) + ' km';
+
+    var wTrack = el('track').clientWidth;
+    var xPx = (pct / 100) * wTrack;
+    var wPill = el('faultPill').offsetWidth;
+    var sx = 0;
+    if (xPx - wPill / 2 < -40) sx = -40 - (xPx - wPill / 2);
+    if (xPx + wPill / 2 > wTrack + 10) sx = (wTrack + 10) - (xPx + wPill / 2);
+    fl.style.setProperty('--sx', sx + 'px');
+
+    var lo = Math.max(0, alvo.km - LINHA.uncKm);
+    var hi = Math.min(LINHA.L, alvo.km + LINHA.uncKm);
+    band.hidden = false;
+    band.style.left = (lo / LINHA.L * 100) + '%';
+    band.style.width = ((hi - lo) / LINHA.L * 100) + '%';
+
+    var linha = obterLinha(alvo.km);
+    seg.hidden = false;
+    seg.style.left = (linha.a.km / LINHA.L * 100) + '%';
+    seg.style.width = ((linha.b.km - linha.a.km) / LINHA.L * 100) + '%';
+  }
+
+  function renderTabela() {
+    var filtrados = alarmes.filter(function(a) {
+      if (filtroAtual === 'ALL') return true;
+      if (filtroAtual === 'ACTIVE') return a.state === 'UNACK' || a.state === 'ACK';
+      return a.state === filtroAtual;
+    });
+
+    el('alarmTableBody').innerHTML = filtrados.map(function(a) {
+      var linha = obterLinha(a.km);
+      var rowCls = [];
+      if (a.id === selecionadoId) rowCls.push('selected');
+      if (a.state === 'UNACK') rowCls.push('row-unack');
+      else if (a.state === 'ACK') rowCls.push('row-ack');
+
+      var pillCls = a.state === 'UNACK' ? 'unack' : (a.state === 'ACK' ? 'ack' : 'rtn');
+
+      return '<tr data-id="' + a.id + '" class="' + rowCls.join(' ') + '">' +
+        '<td><span class="prio ' + a.prio.toLowerCase() + '">' + a.prio + '</span></td>' +
+        '<td class="mono">' + a.when + '</td>' +
+        '<td class="mono">' + fmtNum(a.km) + ' km</td>' +
+        '<td>' + linha.a.name + ' – ' + linha.b.name + '</td>' +
+        '<td><span class="st-pill ' + pillCls + '">' + ROTULO_ESTADO[a.state] + '</span></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderTudo() {
+    renderContadores();
+    renderBanner();
+    renderMarcadores();
+    renderEixo();
+    renderFalhaNoDiagrama();
+    renderTabela();
+  }
+
+  /* Eventos */
+  el('btnAck').addEventListener('click', function() {
+    var ativo = obterAlarmeAtivo();
+    if (!ativo || ativo.state !== 'UNACK') return;
+    ativo.state = 'ACK';
+    selecionadoId = ativo.id;
+    renderTudo();
+  });
+
+  el('btnReset').addEventListener('click', function() {
+    var ativo = obterAlarmeAtivo();
+    if (!ativo) return;
+    ativo.state = 'RTN';
+    renderTudo();
+  });
+
+  el('alarmTableBody').addEventListener('click', function(ev) {
+    var tr = ev.target.closest('tr[data-id]');
+    if (!tr) return;
+    selecionadoId = Number(tr.dataset.id);
+    renderFalhaNoDiagrama();
+    renderTabela();
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      filtroAtual = btn.dataset.filter;
+      renderTabela();
+    });
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(function() {
+      renderEixo();
+      renderFalhaNoDiagrama();
+    }).observe(el('track'));
+  } else {
+    window.addEventListener('resize', function() {
+      renderEixo();
+      renderFalhaNoDiagrama();
+    });
+  }
+
+  function atualizarRelogio() {
+    var d = new Date();
+    el('sysDate').textContent = fmtData(d);
+    el('sysTime').textContent = fmtHora(d);
+  }
+  atualizarRelogio();
+  setInterval(atualizarRelogio, 1000);
+
+  renderTudo();
+})();
+</script>
+</body>
+</html>
